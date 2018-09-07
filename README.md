@@ -1,33 +1,25 @@
 
-# Monaco Editor Samples
+# Live XR Editor 
 
-Standalone HTML samples showing how to integrate the Monaco Editor.
+An XR editor that enables you to see the changes as you edit the file.
 
 ## Running
 
 ```
-git clone https://github.com/Microsoft/monaco-editor-samples.git
-cd monaco-editor-samples
+git clone https://github.com/chrislatorres/live-XR-editor.git 
+cd live-XR-editor 
 npm install .
-npm run simpleserver
+npm run sync
 ```
 
-Go to <a href="http://localhost:8888">localhost:8888</a> and explore the samples!
+The in-app browser goes to <a href="http://localhost:3000">localhost:3000</a> where the monaco-editor is being hosted by browser-sync.
 
-## Loading variations
-* `browser-amd-editor`: running in a browser using `AMD` lazy loading.
-* `browser-script-editor`: running in a browser using `AMD` synchronous loading via `<script>` tags.
-* `browser-esm-webpack`: running in a browser using webpack.
-* `browser-esm-webpack-small`: running in a browser using webpack (only a subset of the editor).
-* `electron-amd`: running in electron.
-* `nwjs-amd` and `nwjs-amd-v2`: running in nwjs. it is reported that v2 works and the initial version does not.
 
-## Other examples & techniques
-* `browser-amd-diff-editor`: running the diff editor in a browser.
-* `browser-amd-iframe`: running in an `<iframe>`.
-* `browser-amd-localized`: running with the `German` locale.
-* `browser-amd-monarch`: running with a custom language grammar written with Monarch.
-* `browser-amd-shared-model`: using the same text model in two editors.
+### TODO:
+- enable "reality tab" functionality
+- allow opening and saving from monaco-editor ( can use fs? ) ( outside tab changes based on which file is being edited currently )
+- enable reloading of outside tab upon saving edited file
+- fix performance ( buffering probably )
 
 ## License
 
