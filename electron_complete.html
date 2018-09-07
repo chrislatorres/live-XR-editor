@@ -1,15 +1,42 @@
 <!doctype html>
 <html>
 <body>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/95/three.js"></script>
+<canvas id=canvas></canvas>
+<div id=container></div>
+<script src="js/three.js"></script>
+<script src="js/ScreenQuad.js"></script>
+<script src="js/keycode.js"></script>
 <script src="https://threejs.org/examples/js/controls/OrbitControls.js"></script>
 <script>
 (() => {
+
+  const container = document.getElementById('container');
+  const canvas = document.getElementById('canvas');
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+
   const width = 2048;
   const height = 2048;
 
-  let camera, scene, renderer, controls, browserPlane,
-    canvas, ctx, texture, browserWindow,
+  function getQueryParameter(name) {
+    name = name.replace(/[\[\]]/g, '\\$&');
+    var regex = new RegExp("[?&]" + name + '(=([^&#]*)|&|#|$)'),
+       results = regex.exec(window.location.href);
+    if (!results) return null;
+    if (!results[2]) return '';
+    return decodeURIComponent(results[2].replace(/\+/g, ' '));
+  }
+
+  const renderer = new THREE.WebGLRenderer({
+    canvas,
+  });
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setPixelRatio(window.devicePixelRatio);
+  renderer.sortObjects = false;
+  renderer.vr.enabled = true;
+
+  let camera, scene, mrenderer, controls, browserPlane,
+    ecanvas, ctx, texture, browserWindow,
     mouse = new THREE.Vector2(),
     raycaster = new THREE.Raycaster();
 
@@ -38,8 +65,8 @@
         transparent: true,
       },
     });
-    canvas.width = browserWindow.width;
-    canvas.height = browserWindow.height;
+    ecanvas.width = browserWindow.width;
+    ecanvas.height = browserWindow.height;
 
     browserWindow.loadURL('http://localhost:3000/');
     browserWindow.setFrameRate(60);
@@ -90,21 +117,34 @@
   function setupScene(){
 
     // Setup Camera
-    camera = new THREE.PerspectiveCamera( 60, window.innerWidth / window.innerHeight, 0.1, 100 );
-    camera.position.z = 1;
+    const upVector = new THREE.Vector3(0, 1, 0);
+    const armQuaternionOffset = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, -1, 0), new THREE.Vector3(0, 0, -1));
+    const localVector = new THREE.Vector3();
+    const localVector2 = new THREE.Vector3();
+    const localVector3 = new THREE.Vector3();
+    const localVector4 = new THREE.Vector3();
+    const localVector5 = new THREE.Vector3();
+    const localQuaternion = new THREE.Quaternion();
+    const localQuaternion2 = new THREE.Quaternion();
+    const localEuler = new THREE.Euler();
+    localEuler.order = 'YXZ';
+    const localEuler2 = new THREE.Euler();
+    localEuler2.order = localEuler.order;
+    const localMatrix = new THREE.Matrix4();
+    const camera = new THREE.PerspectiveCamera(90, window.innerWidth / window.innerHeight, 0.1, 10 * 1024);
+    camera.position.set(0, DEFAULT_USER_HEIGHT, 1);
+    camera.rotation.order = 'YXZ';
 
     // Setup Scene
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0x7E57C2);
 
     // Setup Renderer
-    renderer = new THREE.WebGLRenderer( { antialias: true } );
-    renderer.setPixelRatio( window.devicePixelRatio );
-    renderer.setSize( window.innerWidth, window.innerHeight );
-    document.body.appendChild( renderer.domElement );
+    mrenderer = new THREE.WebGLRenderer( { antialias: true } );
+    mrenderer.setPixelRatio( window.devicePixelRatio );
+    mrenderer.setSize( window.innerWidth, window.innerHeight );
+    document.body.appendChild( mrenderer.domElement );
 
-    // Setup mouse controls.
-    //controls = new THREE.OrbitControls( camera, renderer.domElement );
 
     // Register resize events to handle renderer and camera update
     window.addEventListener( 'resize', onWindowResize, false );
@@ -113,12 +153,12 @@
   function setupCanvasAndTexture(){
 
     // Setup canvas and texture
-    canvas = document.createElement('canvas');
-    canvas.width = width;
-    canvas.height = height;
-    ctx = canvas.getContext('2d');
+    ecanvas = document.createElement('ecanvas');
+    ecanvas.width = width;
+    ecanvas.height = height;
+    ctx = ecanvas.getContext('2d');
     texture = new THREE.Texture(
-      canvas/*,
+      ecanvas/*,
             THREE.UVMapping,
             THREE.ClampToEdgeWrapping,
             THREE.ClampToEdgeWrapping,
@@ -310,6 +350,24 @@
       _updateLocalApps();
       }
 
+    const _makeRenderTarget = (width, height) => {
+      const renderTarget = new THREE.WebGLRenderTarget(width, height);
+      renderTarget.depthTexture = new THREE.DepthTexture(
+        width,
+        height,
+        THREE.UnsignedInt248Type,
+        THREE.UVMapping,
+        THREE.ClampToEdgeWrapping,
+        THREE.ClampToEdgeWrapping,
+        THREE.NearestFilter,
+        THREE.NearestFilter,
+        1,
+        THREE.DepthStencilFormat
+      );
+      return renderTarget;
+    };
+    let renderTarget = _makeRenderTarget(canvas.width, canvas.height);
+
     const floorMesh = (() => {
       const geometry = new THREE.PlaneBufferGeometry(FLOOR_SIZE, FLOOR_SIZE)
         .applyMatrix(new THREE.Matrix4().makeRotationFromQuaternion(
@@ -335,16 +393,6 @@
         THREE.UnsignedByteType,
         1
       );
-      const graphImg = new Image();
-      graphImg.crossOrigin = 'Anonymous';
-      graphImg.src = 'img/graphy.png';
-      graphImg.onload = () => {
-        texture.image = graphImg;
-        texture.needsUpdate = true;
-      };
-      graphImg.onerror = err => {
-        console.warn(err.stack);
-      };
       const material = new THREE.MeshBasicMaterial({
         map: texture,
         side: THREE.DoubleSide,
@@ -385,6 +433,35 @@
       return mesh;
     })();
     scene.add(skyboxMesh);
+
+    const compositeScene = new THREE.Scene();
+    const screenQuad = new ScreenQuad({
+      texture1: renderTarget.texture,
+      depth1: renderTarget.depthTexture,
+    });
+    let framebuffer = null;
+    compositeScene.add(screenQuad);
+    const position = new THREE.Vector3();
+    const velocity = new THREE.Vector3();
+    const speed = 0.0001;
+    let lastTime = Date.now();
+    };
+    const _render = () => {
+      if (framebuffer) {
+        framebuffer.render();
+      }
+      const device = renderer.vr.getDevice();
+      if (device && device.constructor.name === 'FakeVRDisplay') {
+        camera.position.copy(device.position);
+        camera.quaternion.copy(device.quaternion);
+        renderer.render(scene, camera, renderTarget);
+      } else {
+        renderer.render(scene, camera, renderTarget);
+      }
+      renderer.vr.enabled = false;
+      renderer.render(compositeScene, camera);
+      renderer.vr.enabled = true;
+    };
 
     let iframes = [];
     const _openUrl = u => {
@@ -509,14 +586,14 @@
     // Update camera an renderer aspect and size
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
-    renderer.setSize( window.innerWidth, window.innerHeight );
+    mrenderer.setSize( window.innerWidth, window.innerHeight );
   }
 
   function animate() {
 
     // Render loop.
     requestAnimationFrame( animate );
-    renderer.render( scene, camera );
+    mrenderer.render( scene, camera );
 
 })();
 </script>
