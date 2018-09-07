@@ -1,0 +1,15 @@
+{
+  "name": "monaco-editor-samples",
+  "version": "0.0.1",
+  "description": "Samples for using the Monaco Editor",
+  "main": "index.js",
+  "scripts": {
+    "sync": "browser-sync start --server --files '*'"
+  },
+  "author": "Microsoft Corporation",
+  "license": "MIT",
+  "dependencies": {
+    "browser-sync": "^2.24.7",
+    "monaco-editor": "0.x.x"
+  }
+}
