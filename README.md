@@ -25,6 +25,9 @@ The in-app browser goes to <a href="http://localhost:3000">localhost:3000</a> wh
 - enable reloading of outside tab upon saving edited file
 - fix performance ( buffering probably )
 
+
+The electron browser itself is [electron_browser.html](https://github.com/chrislatorres/live-XR-editor/blob/master/electron_browser.html)
+
 ## License
 
 MIT
