@@ -3,6 +3,9 @@
 
 An XR editor that enables you to see the changes as you edit the file.
 
+## Prerequisites
+This editor requires [Exokit](https://github.com/webmixedreality/exokit)
+
 ## Running
 
 ```
@@ -10,6 +13,7 @@ git clone https://github.com/chrislatorres/live-XR-editor.git
 cd live-XR-editor 
 npm install .
 npm run sync
+exokit editor.html
 ```
 
 The in-app browser goes to <a href="http://localhost:3000">localhost:3000</a> where the monaco-editor is being hosted by browser-sync.
