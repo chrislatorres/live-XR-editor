@@ -1,4 +1,4 @@
-<!doctype html>
+renderer<!doctype html>
 <html>
 <body>
 <canvas id=canvas></canvas>
@@ -14,12 +14,31 @@
   const canvas = document.getElementById('canvas');
   canvas.width = window.innerWidth;
   canvas.height = window.innerHeight;
-
-
-  const width = 2048;
-  const height = 2048;
   const DEFAULT_USER_HEIGHT = 1.6;
   const FLOOR_SIZE = 20;
+
+  // Electron browser width and height
+  const width = 2048;
+  const height = 2048;
+
+
+  const upVector = new THREE.Vector3(0, 1, 0);
+  const armQuaternionOffset = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, -1, 0), new THREE.Vector3(0, 0, -1));
+  const localVector = new THREE.Vector3();
+  const localVector2 = new THREE.Vector3();
+  const localVector3 = new THREE.Vector3();
+  const localVector4 = new THREE.Vector3();
+  const localVector5 = new THREE.Vector3();
+  const localQuaternion = new THREE.Quaternion();
+  const localQuaternion2 = new THREE.Quaternion();
+  const localEuler = new THREE.Euler();
+  localEuler.order = 'YXZ';
+  const localEuler2 = new THREE.Euler();
+  localEuler2.order = localEuler.order;
+  const localMatrix = new THREE.Matrix4();
+  const camera = new THREE.PerspectiveCamera(90, window.innerWidth / window.innerHeight, 0.1, 10 * 1024);
+  camera.position.set(0, DEFAULT_USER_HEIGHT, 1);
+  camera.rotation.order = 'YXZ';
 
 
 
@@ -40,16 +59,15 @@
   renderer.sortObjects = false;
   renderer.vr.enabled = true;
 
-  let camera, scene, mrenderer, controls, browserPlane,
-    ecanvas, ctx, texture, browserWindow,
+  let controls, browserPlane,
+    ecanvas, ctx, etexture, browserWindow,
     mouse = new THREE.Vector2(),
     raycaster = new THREE.Raycaster();
 
   init();
-  animate();
+  //animate();
 
   function init() {
-    setupScene();
     setupCanvasAndTexture();
     setupElectron()
       .then(()=>{
@@ -78,7 +96,7 @@
 
     browserWindow.on('paint', o => {
       ctx.putImageData(new ImageData(o.data, o.width, o.height), o.x, o.y );
-      texture.needsUpdate = true;
+      etexture.needsUpdate = true;
     });
     browserWindow.on('dom-ready', async () => {
       console.log('dom-ready');
@@ -112,47 +130,11 @@
     // Setup plane mesh to display canvas
     let geometry = new THREE.PlaneBufferGeometry( 1, browserWindow.height/browserWindow.width );
     let material = new THREE.MeshBasicMaterial( {
-      map: texture,
+      map: etexture,
       side: THREE.DoubleSide,
     } );
     browserPlane = new THREE.Mesh( geometry, material );
     scene.add( browserPlane );
-  }
-
-  function setupScene(){
-
-    // Setup Camera
-    const upVector = new THREE.Vector3(0, 1, 0);
-    const armQuaternionOffset = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, -1, 0), new THREE.Vector3(0, 0, -1));
-    const localVector = new THREE.Vector3();
-    const localVector2 = new THREE.Vector3();
-    const localVector3 = new THREE.Vector3();
-    const localVector4 = new THREE.Vector3();
-    const localVector5 = new THREE.Vector3();
-    const localQuaternion = new THREE.Quaternion();
-    const localQuaternion2 = new THREE.Quaternion();
-    const localEuler = new THREE.Euler();
-    localEuler.order = 'YXZ';
-    const localEuler2 = new THREE.Euler();
-    localEuler2.order = localEuler.order;
-    const localMatrix = new THREE.Matrix4();
-    const camera = new THREE.PerspectiveCamera(90, window.innerWidth / window.innerHeight, 0.1, 10 * 1024);
-    camera.position.set(0, DEFAULT_USER_HEIGHT, 1);
-    camera.rotation.order = 'YXZ';
-
-    // Setup Scene
-    scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x7E57C2);
-
-    // Setup Renderer
-    mrenderer = new THREE.WebGLRenderer( { antialias: true } );
-    mrenderer.setPixelRatio( window.devicePixelRatio );
-    mrenderer.setSize( window.innerWidth, window.innerHeight );
-    document.body.appendChild( mrenderer.domElement );
-
-
-    // Register resize events to handle renderer and camera update
-    window.addEventListener( 'resize', onWindowResize, false );
   }
 
   function setupCanvasAndTexture(){
@@ -162,8 +144,9 @@
     ecanvas.width = width;
     ecanvas.height = height;
     ctx = ecanvas.getContext('2d');
-    texture = new THREE.Texture(
-      ecanvas/*,
+  etexture = new THREE.Texture(
+      ecanvas,
+        /*
             THREE.UVMapping,
             THREE.ClampToEdgeWrapping,
             THREE.ClampToEdgeWrapping,
@@ -171,7 +154,7 @@
             THREE.LinearMipMapNearestFilter,
             THREE.RGBAFormat,
             THREE.UnsignedByteType,
-            1*/
+            1 */
     );
   }
 
@@ -194,7 +177,7 @@
     mouse.y = - ( e.clientY / window.innerHeight ) * 2 + 1;
     raycaster.setFromCamera( mouse, camera );
 
-    let intersects = raycaster.intersectObjects( scene.children );
+    let intersects = raycaster.intersectObjects( mscene.children );
     let localMouse;
     if(intersects.length&&intersects[0].object === browserPlane){
 
@@ -372,6 +355,42 @@
       return renderTarget;
     };
     let renderTarget = _makeRenderTarget(canvas.width, canvas.height);
+
+    const scene = new THREE.Scene();
+    const _makeBackground = () => new THREE.Color(0xFFFFFF);
+    scene.background = _makeBackground();
+
+    const ambientLight = new THREE.AmbientLight(0x808080);
+    scene.add(ambientLight);
+
+    const directionalLight = new THREE.DirectionalLight(0xFFFFFF, 1);
+    directionalLight.position.set(1, 1, 1);
+    scene.add(directionalLight);
+
+    const _isInBody = p => {
+      const hmdEuler = localEuler.setFromQuaternion(camera.quaternion, camera.rotation.order);
+      hmdEuler.x = 0;
+      hmdEuler.z = 0;
+      const hmdQuaternion = localQuaternion.setFromEuler(hmdEuler);
+      const bodyPosition = localVector.copy(camera.position)
+      .add(
+        localVector2.set(0, -0.4, 0.2)
+        .applyQuaternion(hmdQuaternion)
+      );
+      return p.distanceTo(bodyPosition) < 0.35;
+    };
+    const _makeFileObject = file => {
+      const object = new THREE.Object3D();
+      object.file = file;
+      _requestSpriteMesh('file')
+      .then(spriteMesh => {
+        object.add(spriteMesh);
+      })
+      .catch(err => {
+        console.warn(err.stack);
+      });
+      return object;
+    };
 
     const floorMesh = (() => {
       const geometry = new THREE.PlaneBufferGeometry(FLOOR_SIZE, FLOOR_SIZE)
@@ -644,23 +663,7 @@
       if (initialTab) {
         _submitUrl(initialTab);
       }
-
-  function onWindowResize() {
-
-    // Update camera an renderer aspect and size
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
-    mrenderer.setSize( window.innerWidth, window.innerHeight );
-  }
-
-  function animate() {
-
-    // Render loop.
-    requestAnimationFrame( animate );
-    //mrenderer.render( scene, camera );
-  }
 })();
-
 </script>
 </body>
 </html>
