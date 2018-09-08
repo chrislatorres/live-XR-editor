@@ -17,10 +17,6 @@ renderer<!doctype html>
   const DEFAULT_USER_HEIGHT = 1.6;
   const FLOOR_SIZE = 20;
 
-  // Electron browser width and height
-  const width = 2048;
-  const height = 2048;
-
 
   const upVector = new THREE.Vector3(0, 1, 0);
   const armQuaternionOffset = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, -1, 0), new THREE.Vector3(0, 0, -1));
@@ -36,10 +32,11 @@ renderer<!doctype html>
   const localEuler2 = new THREE.Euler();
   localEuler2.order = localEuler.order;
   const localMatrix = new THREE.Matrix4();
-  const camera = new THREE.PerspectiveCamera(90, window.innerWidth / window.innerHeight, 0.1, 10 * 1024);
-  camera.position.set(0, DEFAULT_USER_HEIGHT, 1);
-  camera.rotation.order = 'YXZ';
-
+  // const camera = new THREE.PerspectiveCamera(90, window.innerWidth / window.innerHeight, 0.1, 10 * 1024);
+  // camera.position.set(0, DEFAULT_USER_HEIGHT, 1);
+  // camera.rotation.order = 'YXZ';
+  camera = new THREE.PerspectiveCamera( 60, window.innerWidth / window.innerHeight, 0.1, 100 );
+  camera.position.z = 1;
 
 
   function getQueryParameter(name) {
@@ -173,279 +170,6 @@ renderer<!doctype html>
   };
   _enterFakeDisplay();
 
-
-  let controls, browserPlane,
-    ecanvas, ctx, etexture, browserWindow,
-    mouse = new THREE.Vector2(),
-    raycaster = new THREE.Raycaster();
-
-  init();
-  //animate();
-
-  function init() {
-    setupCanvasAndTexture();
-    setupElectron()
-      .then(()=>{
-        setupBrowserPlane();
-        setupListeners();
-      });
-  }
-
-  async function setupElectron(){
-    const elctrn = await browser.electron.createElectron();
-    browserWindow = await elctrn.createBrowserWindow({
-      width,
-      height,
-      show: false,
-      frame: false,
-      webPreferences: {
-        offscreen: true,
-        transparent: true,
-      },
-    });
-    ecanvas.width = browserWindow.width;
-    ecanvas.height = browserWindow.height;
-
-    browserWindow.loadURL('http://localhost:3000/');
-    browserWindow.setFrameRate(60);
-
-    browserWindow.on('paint', o => {
-      ctx.putImageData(new ImageData(o.data, o.width, o.height), o.x, o.y );
-      etexture.needsUpdate = true;
-    });
-    browserWindow.on('dom-ready', async () => {
-      console.log('dom-ready');
-      await browserWindow.insertCSS(`
-                ::-webkit-scrollbar {
-                  height: 30px;
-                  width: 30px;
-                  background: #e0e0e0;
-                }
-
-                ::-webkit-scrollbar-thumb {
-                  background: #4db6ac;
-                }
-
-                ::-webkit-scrollbar-corner {
-                  background: #cfcfcf;
-                }
-              `);
-      //texture.needsUpdate = true;
-    });
-    browserWindow.on('did-fail-load', () => {
-      console.log('failed to load!');
-
-      // browserWindow.destroy();
-      // elctrn.destroy();
-    });
-  }
-
-  function setupBrowserPlane(){
-
-    // Setup plane mesh to display canvas
-    let geometry = new THREE.PlaneBufferGeometry( 1, browserWindow.height/browserWindow.width );
-    let material = new THREE.MeshBasicMaterial( {
-      map: etexture,
-      side: THREE.DoubleSide,
-    } );
-    browserPlane = new THREE.Mesh( geometry, material );
-    scene.add( browserPlane );
-  }
-
-  function setupCanvasAndTexture(){
-
-    // Setup canvas and texture
-    ecanvas = document.createElement('canvas');
-    ecanvas.width = width;
-    ecanvas.height = height;
-    ctx = ecanvas.getContext('2d');
-  etexture = new THREE.Texture(
-      ecanvas,
-        /*
-            THREE.UVMapping,
-            THREE.ClampToEdgeWrapping,
-            THREE.ClampToEdgeWrapping,
-            THREE.LinearMipMapNearestFilter,
-            THREE.LinearMipMapNearestFilter,
-            THREE.RGBAFormat,
-            THREE.UnsignedByteType,
-            1 */
-    );
-  }
-
-  function mouseEvent(type,e){
-    if(type==="mousewheel"){
-      let localMouse = {
-        x:0,
-        y:0,
-
-      };
-
-      // Store the delta for mousewheel events.
-      localMouse.deltaY = e.deltaY;
-      localMouse.deltaX = e.deltaX;
-      return sendMouseEvent(type,e,localMouse);
-    }
-
-    // Get normalised mouse coordinates
-    mouse.x = ( e.clientX / window.innerWidth ) * 2 - 1;
-    mouse.y = - ( e.clientY / window.innerHeight ) * 2 + 1;
-    raycaster.setFromCamera( mouse, camera );
-
-    let intersects = raycaster.intersectObjects( scene.children );
-    let localMouse;
-    if(intersects.length&&intersects[0].object === browserPlane){
-
-      // Convert the intersection point from world to local coordinates.
-      let localPoint = browserPlane.worldToLocal(intersects[0].point);
-      let planeHeight = browserWindow.height/browserWindow.width;
-      localMouse = {
-        x:((localPoint.x+0.5)/1)*browserWindow.width,
-        // Invert the Y coordinate for top down orientation of the browser coordinates.
-        y:browserWindow.height-(((planeHeight/2+localPoint.y)/planeHeight)*browserWindow.height)
-      };
-
-      //Pause the orbit controls for mousemove events in betweenmousedown and mouseup
-      if(type==='mousedown'){
-        //controls.enabled = false;
-      }
-      if(type==='mouseup'){
-        //controls.enabled = true;
-      }
-      sendMouseEvent(type,e,localMouse);
-    }
-  }
-
-  function sendMouseEvent(type,e,mouse){
-    let _event;
-    let _button;
-    if(e.detail){
-      // Convert the mouse button value to a string for electron webcontents.
-      switch(e.detail.button){
-        case 0:
-          _button = 'left';
-          break;
-        case 1:
-          _button = 'middle';
-          break;
-        case 2:
-          _button = 'right';
-          break;
-      }
-    }
-    switch(type){
-      case 'mousemove':
-      case 'mouseup':
-      case 'mousedown':
-        // Set minimum options for mouse events.
-        _event = {
-          type:type,
-          x:mouse.x,
-          y:mouse.y,
-          button:_button||'left',
-          globalX:mouse.x,
-          globalY:mouse.y,
-          movementX:0,
-          movementY:0,
-          clickCount:1
-        };
-        break;
-      case 'mousewheel':
-        // Set minimum options for mousewheel events.
-        _event = {
-          type:type,
-          x:mouse.x,
-          y:mouse.y,
-          button:3,
-          globalX:mouse.x,
-          globalY:mouse.y,
-          movementX:0,
-          movementY:0,
-          clickCount:1,
-          deltaX:-mouse.deltaX,
-          deltaY:-mouse.deltaY,
-          wheelTicksX:0,
-          wheelTicksY:0,
-          accelerationRatioX:1,
-          accelerationRatioY:1,
-          hasPreciseScrollingDeltas:true,
-          canScroll:true
-        };
-        break;
-    }
-    if(_event){
-      // Send the event to electron over IPC.
-      browserWindow.sendInputEvent(_event);
-    }
-  }
-
-  function mousemove(e){
-    mouseEvent('mousemove',e);
-  }
-
-  function mousedown(e){
-    mouseEvent('mousedown',e);
-  }
-
-  function mouseup(e){
-    mouseEvent('mouseup',e);
-  }
-
-  function mousewheel(e){
-    mouseEvent('mousewheel',e);
-  }
-
-  function keyup(e){
-    keyEvent('keyup',e);
-  }
-
-  function keydown(e){
-    keyEvent('keyup',e);
-  }
-
-  function keyEvent(type,e){
-    // Setup modifiers array and populate form the key events.
-    let modifiers = [];
-    if(e.ctrlKey){
-      modifiers.push('control');
-    }
-    if(e.altKey){
-      modifiers.push('alt');
-    }
-    if(e.metaKey){
-      modifiers.push('meta');
-    }
-    if(e.shiftKey){
-      modifiers.push('shift');
-    }
-    if(e.repeat){
-      modifiers.push('isAutoRepeat');
-    }
-    browserWindow.sendInputEvent({
-      type:type,
-      keyCode:e.key,
-      modifiers:modifiers
-    });
-    // If is an alphanumeric key then send the char event also to get the text to show up in the input fields
-    // Do not send if this is a modified keypress i.e. Ctrl+A, Ctrl+V
-    if (e.which <= 90 && e.which >= 48&&type==="keyup"&&!modifiers.length){
-      browserWindow.sendInputEvent({
-        type:'char',
-        keyCode:e.key
-      });
-    }
-  }
-
-  function setupListeners(){
-
-    // Register keyboard and mouse event listeners
-    document.addEventListener( 'mousemove', mousemove, false );
-    document.addEventListener( 'mousedown', mousedown, false );
-    document.addEventListener( 'mouseup', mouseup, false );
-    document.addEventListener( 'wheel', mousewheel, false);
-    document.addEventListener( 'keyup', keyup, false);
-    document.addEventListener( 'keydown', keydown, false);
-  }
 
 
     const _submitUrl = u => {
@@ -788,9 +512,119 @@ renderer<!doctype html>
       });
       THREE.AudioContext.setContext(audioCtx);
 
-    var initialTab = 'http://threejs.org/examples/webgl_animation_cloth.html';
+// START ELECTRON BROWSER
+
+const ewidth = 2048;
+const eheight = 2048;
+
+let controls, browserPlane,
+ecanvas, ctx, etexture, browserWindow,
+mouse = new THREE.Vector2(),
+raycaster = new THREE.Raycaster();
+
+init();
+animate();
+
+
+
+function init() {
+  setupCanvasAndTexture();
+  setupElectron()
+  .then(()=>{
+    setupBrowserPlane();
+  //  setupListeners();
+  });
+}
+
+async function setupElectron(){
+  const elctrn = await browser.electron.createElectron();
+  browserWindow = await elctrn.createBrowserWindow({
+    ewidth,
+    eheight,
+    show: false,
+    frame: false,
+    webPreferences: {
+      offscreen: true,
+      transparent: true,
+    },
+  });
+  ecanvas.width = browserWindow.width;
+  ecanvas.height = browserWindow.height;
+
+  browserWindow.loadURL('http://localhost:3000');
+  browserWindow.setFrameRate(60);
+
+  browserWindow.on('paint', o => {
+    ctx.putImageData(new ImageData(o.data, o.width, o.height), o.x, o.y );
+    etexture.needsUpdate = true;
+  });
+  browserWindow.on('dom-ready', async () => {
+    console.log('dom-ready');
+    await browserWindow.insertCSS(`
+      ::-webkit-scrollbar {
+        height: 30px;
+        width: 30px;
+        background: #e0e0e0;
+      }
+
+      ::-webkit-scrollbar-thumb {
+        background: #4db6ac;
+      }
+
+      ::-webkit-scrollbar-corner {
+        background: #cfcfcf;
+      }
+      `);
+      //texture.needsUpdate = true;
+    });
+    browserWindow.on('did-fail-load', () => {
+      console.log('failed to load!');
+
+      // browserWindow.destroy();
+      // elctrn.destroy();
+    });
+  }
+
+  function setupBrowserPlane(){
+    // Setup plane mesh to display canvas
+    let egeometry = new THREE.PlaneBufferGeometry( 1, browserWindow.height/browserWindow.width );
+    let ematerial = new THREE.MeshBasicMaterial( {
+      map: etexture,
+      side: THREE.DoubleSide,
+    } );
+    browserPlane = new THREE.Mesh( egeometry, ematerial );
+    scene.add( browserPlane );
+  }
+
+  function setupCanvasAndTexture(){
+
+    // Setup canvas and texture
+    ecanvas = document.createElement('canvas');
+    ecanvas.width = ewidth;
+    ecanvas.height = eheight;
+    ctx = ecanvas.getContext('2d');
+    etexture = new THREE.Texture(
+      ecanvas/*,
+      THREE.UVMapping,
+      THREE.ClampToEdgeWrapping,
+      THREE.ClampToEdgeWrapping,
+      THREE.LinearMipMapNearestFilter,
+      THREE.LinearMipMapNearestFilter,
+      THREE.RGBAFormat,
+      THREE.UnsignedByteType,
+      1*/
+    );
+  }
+
+// END ELECTRON BROWSER
+
+      var initialTab = 'https://threejs.org/examples/webgl_animation_cloth.html';
       if (initialTab) {
         _submitUrl(initialTab);
+        // var secondTab = 'http://localhost:3000';
+        // if (u = initialTab) {
+        //   _submitUrl(secondTab);
+        // }
       }
 
       function animate() {
