@@ -59,6 +59,121 @@ renderer<!doctype html>
   renderer.sortObjects = false;
   renderer.vr.enabled = true;
 
+  const fakeDisplay = window.navigator.createVRDisplay();
+  fakeDisplay.setSize(window.innerWidth * window.devicePixelRatio, window.innerHeight * window.devicePixelRatio);
+  fakeDisplay.getEyeParameters = (getEyeParameters => function(eye) {
+    if (!fakeDisplay.getStereo() && eye === 'right') {
+      const result = getEyeParameters.call(this, 'right');
+      result.renderWidth = 0;
+      return result;
+    } else {
+      return getEyeParameters.apply(this, arguments);
+    }
+  })(fakeDisplay.getEyeParameters);
+  fakeDisplay.position.copy(camera.position);
+  fakeDisplay.quaternion.copy(camera.quaternion);
+  camera.projectionMatrix.toArray(fakeDisplay._frameData.leftProjectionMatrix);
+  camera.projectionMatrix.toArray(fakeDisplay._frameData.rightProjectionMatrix);
+  fakeDisplay.stereo = false;
+  fakeDisplay.update();
+  if (window.tickAnimationFrame) {
+    fakeDisplay.onrequestanimationframe = fn => window.tickAnimationFrame.window.requestAnimationFrame(fn, 1);
+  } else {
+    fakeDisplay.onrequestanimationframe = fn => window.requestAnimationFrame(fn, 1);
+  }
+  fakeDisplay.onvrdisplaypresentchange = () => {
+    setTimeout(() => {
+      const e = new Event('vrdisplaypresentchange');
+      e.display = fakeDisplay;
+      window.dispatchEvent(e);
+    });
+  };
+  const _enterFakeDisplay = (stereo = false) => {
+    if (fakeDisplay.session) {
+      fakeDisplay.session.end();
+    }
+    fakeDisplay.requestPresent([{source: canvas}])
+      .then(() => {
+        renderer.vr.setDevice(fakeDisplay);
+        renderer.vr.setAnimationLoop(animate);
+        if (navigator.xr) {
+          const views = !stereo ? [{
+            eye: 'left',
+            projectionMatrix: fakeDisplay._frameData.leftProjectionMatrix,
+            _viewport: {
+              x: 0,
+              y: 0,
+              width: fakeDisplay._width,
+              height: fakeDisplay._height,
+            },
+          }] : [
+            {
+              eye: 'left',
+              projectionMatrix: fakeDisplay._frameData.leftProjectionMatrix,
+              _viewport: {
+                x: 0,
+                y: 0,
+                width: fakeDisplay._width / 2,
+                height: fakeDisplay._height,
+              },
+            },
+            {
+              eye: 'right',
+              projectionMatrix: fakeDisplay._frameData.rightProjectionMatrix,
+              _viewport: {
+                x: fakeDisplay._width / 2,
+                y: 0,
+                width: fakeDisplay._width / 2,
+                height: fakeDisplay._height,
+              }
+            },
+          ];
+          const devicePose = {
+            getViewMatrix(view) {
+              return fakeDisplay._frameData[view.eye === 'left' ? 'leftViewMatrix' : 'rightViewMatrix'];
+            },
+          };
+          const frame = {
+            views,
+            getDevicePose() {
+              return devicePose;
+            },
+          };
+          const onends = [];
+          const session = {
+            addEventListener(e, fn) {
+              if (e === 'end') {
+                onends.push(fn);
+              }
+            },
+            baseLayer: null,
+            requestFrameOfReference() {
+              return Promise.resolve(stereo ? {} : null);
+            },
+            device: fakeDisplay,
+            requestAnimationFrame: fn => window.requestAnimationFrame(timestamp => {
+              fn(timestamp, frame);
+            }, 1),
+            end() {
+              for (let i = 0; i < onends.length; i++) {
+                onends[i]();
+              }
+              return fakeDisplay.exitPresent();
+            },
+          };
+          fakeDisplay.session = session;
+          renderer.vr.setSession(session, {
+            frameOfReferenceType: 'stage',
+          });
+        } else {
+          window.dispatchEvent(new Event('vrdisplaypresentchange'));
+        }
+        fakeDisplay.stereo = stereo;
+      });
+  };
+  _enterFakeDisplay();
+
+
   let controls, browserPlane,
     ecanvas, ctx, etexture, browserWindow,
     mouse = new THREE.Vector2(),
@@ -177,7 +292,7 @@ renderer<!doctype html>
     mouse.y = - ( e.clientY / window.innerHeight ) * 2 + 1;
     raycaster.setFromCamera( mouse, camera );
 
-    let intersects = raycaster.intersectObjects( mscene.children );
+    let intersects = raycaster.intersectObjects( scene.children );
     let localMouse;
     if(intersects.length&&intersects[0].object === browserPlane){
 
@@ -458,6 +573,20 @@ renderer<!doctype html>
     })();
     scene.add(skyboxMesh);
 
+    let menuImg = null;
+    let menuMetrics = null;
+    const _renderHtml = u => {
+      window.drawWindow && window.drawWindow(`html/${u}`, menuWidth, menuHeight)
+      .then(({img, metrics}) => {
+        menuImg = img;
+        menuMetrics = metrics;
+        menuMesh.urlMesh.updateText();
+      })
+      .catch(err => {
+        console.warn(err.stack);
+      });
+    };
+
     const compositeScene = new THREE.Scene();
     const screenQuad = new ScreenQuad({
       texture1: renderTarget.texture,
@@ -663,6 +792,20 @@ renderer<!doctype html>
       if (initialTab) {
         _submitUrl(initialTab);
       }
+
+      function animate() {
+        const currentTime = Date.now();
+        const timePassed = Math.max(currentTime - lastTime, 1);
+        lastTime = currentTime;
+        if (window.requestAnimationFrame.length === 1) {
+          _render();
+        }
+
+        if (!renderer.vr.getDevice()) {
+          window.requestAnimationFrame(animate, 1);
+        }
+      }
+
 })();
 </script>
 </body>
