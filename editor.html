@@ -580,6 +580,66 @@
        }
       }
 
+      window.addEventListener('resize', e => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        camera.projectionMatrix.toArray(fakeDisplay._frameData.leftProjectionMatrix);
+        camera.projectionMatrix.toArray(fakeDisplay._frameData.rightProjectionMatrix);
+        const device = renderer.vr.getDevice();
+        if (device === fakeDisplay) {
+          renderer.vr.setDevice(null);
+          renderer.vr.setAnimationLoop(null);
+        }
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        if (device === fakeDisplay) {
+          renderer.vr.setDevice(fakeDisplay);
+          renderer.vr.setAnimationLoop(animate);
+        }
+      });
+      let displays = [];
+      const _updateDisplays = () => {
+        Promise.all([
+          window.navigator.getVRDisplays ? window.navigator.getVRDisplays() : Promise.resolve([]),
+          window.navigator.xr ? window.navigator.xr.requestDevice('VR').then(device => device ? [device] : []) : Promise.resolve([]),
+          window.navigator.xr ? window.navigator.xr.requestDevice('AR').then(device => device ? [device] : []) : Promise.resolve([]),
+        ])
+        .then(ds => {
+          displays.length = 0;
+          for (let i = 0; i < ds.length; i++) {
+            displays.push.apply(displays, ds[i]);
+          }
+        })
+        .catch(err => {
+          console.warn(err);
+        });
+      };
+      _updateDisplays();
+      window.addEventListener('vrdisplayconnect', _updateDisplays);
+      window.addEventListener('vrdisplaydisconnect', _updateDisplays);
+      const resources = [];
+      const _resourcesUpdate = () => {
+        let value = 0;
+        let total =  0;
+        for (let i = 0; i < resources.length; i++) {
+          for (let j = 0; j < resources[i].resources.length; j++) {
+            const resource = resources[i].resources[j];
+            value += resource.value;
+            total += resource.total;
+          }
+        }
+      };
+      if (window.document.resources) {
+        resources.push(window.document.resources);
+      }
+      for (let i = 0; i < resources.length; i++) {
+        window.document.resources.addEventListener('update', _resourcesUpdate);
+      }
+      const audioCtx = new AudioContext({
+        sampleRate: 48000,
+      });
+      THREE.AudioContext.setContext(audioCtx);
+
     var initialTab = 'http://threejs.org/examples/webgl_animation_cloth.html';
       if (initialTab) {
         _submitUrl(initialTab);
