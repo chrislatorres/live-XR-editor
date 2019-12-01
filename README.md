@@ -3,7 +3,7 @@
 
 An XR editor that enables you to see the changes as you edit the file.
 
-![Live XR Editor](https://raw.githubusercontent.com/chrislatorres/live-XR-editor/master/img/editor.png)
+![Live XR Editor](https://raw.githubusercontent.com/chrisplatorres/live-XR-editor/master/img/editor.png)
 
 ## Prerequisites
 This editor requires [Exokit](https://github.com/webmixedreality/exokit) to run electron.
@@ -11,7 +11,6 @@ This editor requires [Exokit](https://github.com/webmixedreality/exokit) to run 
 ## Running
 
 ```
-git clone https://github.com/chrislatorres/live-XR-editor.git 
 cd live-XR-editor 
 npm install .
 npm run sync
